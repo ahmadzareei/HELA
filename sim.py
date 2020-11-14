@@ -206,6 +206,23 @@ def PK1(u,x,extruded = False, E = 1.0, nu=0.3):
 
     return diff(psi, F)
 
+def PK1_inc(u,x,extruded = False, E = 1.0, nu=0.5):
+    if extruded:
+        F = variable(Identity(2)+grad(u))
+    else:
+        F = variable(defgrad(u,x))
+    C = F.T * F
+    Ic = tr(C)
+    J = det(F)
+
+    mu = Constant(E / (2 * (1 + nu)))
+
+    if extruded:
+         psi = (mu/2)*(Ic-2)
+    else:
+        psi = (mu / 2) * (Ic - 3) 
+
+    return diff(psi, F)
 
 class PointWiseBC(DirichletBC):
     def nodes_to_zero(self, l1, l2):
@@ -220,6 +237,7 @@ class PointWiseBC(DirichletBC):
         bcnodes1 = functools.reduce(np.intersect1d, bcnodes1)
         bcnodes.append(bcnodes1)
         return bcnodes[0]
+
 
 
 def simulate(lens_config, nu=0.3, num_increments = 200, increment_length = 5e-2,compress = False):
@@ -381,6 +399,174 @@ def simulate(lens_config, nu=0.3, num_increments = 200, increment_length = 5e-2,
     sio.savemat(foldername + '/outLens.mat',{'outL':outL, 'outR':outR})
     return True
 
+def simulate_incompressible(lens_config, nu=0.5, num_increments = 200, increment_length = 5e-2,compress = False):
+    """
+    the main function that simulates the problem
+    """
+    Rr, Rl, t, h, bl1, bl2, boundaryLayer, extruded = read_config(lens_config)
+    folder = folderPath(lens_config) + '/mesh/';
+    filePathMesh = folder + 'mesh.msh'
+    filePathStep = folder + 'mesh.step'
+    base = Mesh(filePathMesh)
+    # filePathStep = filePathMesh[:-3]+'step'
+    mh = mhg.create_labeled_hierarchy(base,filePathStep, levels=0, order=2)
+    mesh = mh[-1]
+
+    x = SpatialCoordinate(mesh)
+    # Taylor-Hood
+    V = VectorFunctionSpace(mesh, "CG", 2)
+    Q = FunctionSpace(mesh, "CG", 1)
+
+    W = V*Q
+    z = Function(W)
+    v = TestFunction(W)
+    E = 1.0;
+
+    # Storing the strain energy
+    Sc = FunctionSpace(mesh, "DG", 1)
+    pse = Function(Sc)
+    vnms = Function(Sc)
+    if extruded:
+        Tc = TensorFunctionSpace(mesh, "DG",1)
+    else:
+        Tc = TensorFunctionSpace(mesh, "DG", 2)
+    Green = Function(Tc)
+    Green.rename("Strain")
+    pse.rename("StrainEnergy")
+    vnms.rename("VonMisesStrain")
+
+
+
+
+    # Defining the left and right lens surface
+    nleft = V.boundary_nodes(5, 'topological') # left surface of lens marked as 3
+    nright = V.boundary_nodes(3, 'topological') # right surface of lens is marked as 5
+    coords = interpolate(SpatialCoordinate(mesh), V)
+    with coords.dat.vec_ro as xdat:
+        pass
+
+    c = xdat.array
+    c = c.reshape((-1, 2))
+    cl = c[nleft, :]
+    cr = c[nright, :]
+    # plt.scatter(cr[:, 0], cr[:, 1], c="C0")
+    # plt.scatter(cl[:, 0], cl[:, 1], c="C1")
+    # plt.show()
+
+    outL = []; # the Left lens surface points
+    outR = []; # the right lens surface points
+
+    points_left = cl
+    points_right = cr
+
+    temp = Function(V)
+    newpoints_left = points_left + temp.dat.data[nleft, :];
+    newpoints_right = points_right + temp.dat.data[nright, :];
+    outL.append(newpoints_left)
+    outR.append(newpoints_right)
+
+    # R.\Omega is the force if the lens is rotating
+    #FIXME
+    extruded=True
+    if extruded:
+        u,p = split(z)
+        F1  = grad(u)+Identity(2)
+        J = det(F)
+        Lag_pressure = p*(J-1)*dx
+        R1 = derivative(Lag_pressure,z,v) 
+        v0,v1 = split(v)
+        R  = inner(PK1_inc(u,x,extruded = extruded,E=E), grad(v0))*dx
+        R += R1
+    else:
+        rhomega = Constant(1e-12)
+        R = inner(PK1_inc(u,x,extruded = extruded,E=E,nu=nu), ggrad(v,x)) * x[0] * dx - rhomega * x[0] * v[0] * x[0] * dx
+
+    bc1 = DirichletBC(W.sub(0).sub(0), Constant(0), 2)
+    bc2 = PointWiseBC(W.sub(0), Constant((0, 0)), 3)
+
+    bc2.nodes = bc2.nodes_to_zero(3,4)
+    print(bc2.nodes)
+    bcs = [bc1, bc2]
+
+    bcs = [bc1]
+
+    params = {"mat_type": "aij",
+              # "snes_monitor": None,
+              "snes_rtol": 1e-9,
+              "snes_atol": 1e-8,
+              "snes_linesearch_type": "l2",
+              "ksp_type": "gmres",
+              "pc_type": "lu",
+              "pc_factor_mat_solver_type": "mumps"}
+
+
+    foldername = filePathMesh[:-14] + '/output'
+    mkdir(foldername)
+    if compress:
+        direction = -1;
+    else:
+        direction = 1;
+
+    if compress:
+        foldername = foldername + '/cmp_nu_' + str(nu);
+    else:
+        foldername = foldername+'/nu_' + str(nu);
+    mkdir(foldername)
+    outfile = File(foldername + "/result.pvd")
+
+    for i in range(num_increments):
+        # plt.clf()
+        print("Iteration: ", i)
+
+        scale = (i + 1) * increment_length*direction
+
+        bc3 = DirichletBC(W.sub(0).sub(0), Constant(scale), 4)
+        bcs = [bc1, bc2, bc3]
+
+        solve(R == 0, z, bcs, solver_parameters=params)
+        u,p = z.split()
+        u.rename("Displacement")
+        newpoints_left = points_left + u.dat.data[nleft, :];
+        newpoints_right = points_right + u.dat.data[nright, :];
+
+        outL.append(newpoints_left)
+        outR.append(newpoints_right)
+
+
+
+        if extruded:
+            F = variable(Identity(2)+grad(u))
+        else:
+            F = variable(defgrad(u,x))
+        C = F.T * F
+        Ic = tr(C)
+        J = det(F)
+
+        mu, lmbda = Constant(E / (2 * (1 + nu))), Constant(E * nu / ((1 + nu) * (1 - 2 * nu)))
+
+        if extruded:
+             psi = (mu/2)*(Ic-2)
+             Green.interpolate(Constant(0.5) * (C - Identity(2)))
+             Strain = Constant(0.5) * (C - Identity(2));
+             # FIXME: Shouldnt the deviatoric now be 1 because incompressible
+             Straindev = Strain - 1/3.*tr(Strain)*Identity(2);
+             SVM = sqrt(2/3.*inner(Straindev,Straindev))
+             vnms.interpolate(SVM)
+             pse.interpolate(psi)
+
+             outfile.write(u, pse, Green,vnms)
+        else:
+            psi = (mu / 2) * (Ic - 3) - mu * ln(J) + (lmbda / 2) * (ln(J)) ** 2
+            # Green.interpolate(Constant(0.5) * (C - Identity(3)))
+            # pse.interpolate(psi)
+            outfile.write(u, pse) # , Green
+
+        # Green.interpolate(Constant(0.5) * (C - Identity(2)))
+
+
+    np.savez(foldername + '/outLens.npz', outL=outL, outR=outR);
+    sio.savemat(foldername + '/outLens.mat',{'outL':outL, 'outR':outR})
+    return True
 def sort_points(P,xc):
     P = P[P[:,1].argsort(), 0:2];
     return P;
