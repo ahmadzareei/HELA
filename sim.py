@@ -471,7 +471,7 @@ def simulate_incompressible(lens_config, nu=0.5, num_increments = 200, increment
     if extruded:
         u,p = split(z)
         F1  = grad(u)+Identity(2)
-        J = det(F)
+        J = det(F1)
         Lag_pressure = p*(J-1)*dx
         R1 = derivative(Lag_pressure,z,v) 
         v0,v1 = split(v)
@@ -542,7 +542,7 @@ def simulate_incompressible(lens_config, nu=0.5, num_increments = 200, increment
         Ic = tr(C)
         J = det(F)
 
-        mu, lmbda = Constant(E / (2 * (1 + nu))), Constant(E * nu / ((1 + nu) * (1 - 2 * nu)))
+        mu = Constant(E / (2 * (1 + nu)))
 
         if extruded:
              psi = (mu/2)*(Ic-2)
@@ -729,7 +729,7 @@ def lens_simulation(lens_config, meshsize, nu, n, num_increments=200, increment_
             focal_aberration_anlaysis(lens_config, n=n, nu=nu,compress = compress)
     else:
         generate_mesh(lens_config, meshsize)
-        simulate(lens_config, nu=nu, num_increments=num_increments, increment_length=increment_length,compress = compress)
+        simulate_incompressible(lens_config, nu=nu, num_increments=num_increments, increment_length=increment_length,compress = compress)
         focal_aberration_anlaysis(lens_config, n=n, nu=nu,compress = compress)
 
 
@@ -744,18 +744,18 @@ def main():
     compress = False
 
     lens_config = {'Rr':40, 'Rl':1500, 't':8, 'h':25, 'bl1': 0, 'bl2':0, 'boundaryLayer':False, 'extruded':False, 'concave':True}
-    num_increments = 50
-    lens_simulation(lens_config, meshsize, [0.31,0.451], n, num_increments = num_increments, increment_length = increment_length, compress = True)
+    #num_increments = 50
+    #lens_simulation(lens_config, meshsize, [0.31,0.451], n, num_increments = num_increments, increment_length = increment_length, compress = True)
     num_increments = 100
-    lens_simulation(lens_config, meshsize, [0.31,0.451], n, num_increments = num_increments, increment_length = increment_length, compress = False)
+    lens_simulation(lens_config, meshsize, 0.5, n, num_increments = num_increments, increment_length = increment_length, compress = False)
 
 
 
-    lens_config = {'Rr':40, 'Rl':1500, 't':18, 'h':25, 'bl1': 0, 'bl2':0, 'boundaryLayer':False, 'extruded':False, 'concave':False}
-    num_increments = 50
-    lens_simulation(lens_config, meshsize, [0.31,0.451], n, num_increments = num_increments, increment_length = increment_length, compress = True)
-    num_increments = 100
-    lens_simulation(lens_config, meshsize, [0.31,0.451], n, num_increments = num_increments, increment_length = increment_length, compress = False)
+    #lens_config = {'Rr':40, 'Rl':1500, 't':18, 'h':25, 'bl1': 0, 'bl2':0, 'boundaryLayer':False, 'extruded':False, 'concave':False}
+    #num_increments = 50
+    #lens_simulation(lens_config, meshsize, [0.31,0.451], n, num_increments = num_increments, increment_length = increment_length, compress = True)
+    #num_increments = 100
+    #lens_simulation(lens_config, meshsize, [0.31,0.451], n, num_increments = num_increments, increment_length = increment_length, compress = False)
 
 
  
