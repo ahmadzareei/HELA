@@ -434,6 +434,7 @@ def simulate_incompressible(lens_config, nu=0.5, num_increments = 200, increment
     Green.rename("Strain")
     pse.rename("StrainEnergy")
     vnms.rename("VonMisesStrain")
+    cauchy = Function(Tc,name="Cauchy")
 
 
 
@@ -546,6 +547,13 @@ def simulate_incompressible(lens_config, nu=0.5, num_increments = 200, increment
 
         if extruded:
              psi = (mu/2)*(Ic-2)
+             pk1 = diff(psi, F)
+             # FIXME: I believe we can get the actual dependence out in 3D 
+             # I am not sure if this perfectly correct
+             sigma = 1/J*pk1*F.T + p*Identity(2)
+             cauchy.interpolate(sigma)
+              
+            
              Green.interpolate(Constant(0.5) * (C - Identity(2)))
              Strain = Constant(0.5) * (C - Identity(2));
              # FIXME: Shouldnt the deviatoric now be 1 because incompressible
@@ -554,7 +562,7 @@ def simulate_incompressible(lens_config, nu=0.5, num_increments = 200, increment
              vnms.interpolate(SVM)
              pse.interpolate(psi)
 
-             outfile.write(u, pse, Green,vnms)
+             outfile.write(u, pse, Green,vnms,cauchy)
         else:
             psi = (mu / 2) * (Ic - 3) - mu * ln(J) + (lmbda / 2) * (ln(J)) ** 2
             # Green.interpolate(Constant(0.5) * (C - Identity(3)))
