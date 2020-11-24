@@ -125,14 +125,15 @@ def make_mesh(meshGeo, lens_config, meshsize):
         else:
             meshGeoFileName = 'lens'
     # /home/mathiew/Documents/Apps/gmsh-4.6.0-Linux64/bin/
-    out = "gmsh -2 ./mesh/"+meshGeoFileName+".geo -setnumber Rr %f -setnumber Rl %f -setnumber t %f -setnumber h %f -setnumber meshsize %f -setnumber bl1 %f -setnumber bl2 %f -o %s" % (
+    out = "./gmsh_2 -2 ./mesh/"+meshGeoFileName+".geo -setnumber Rr %f -setnumber Rl %f -setnumber t %f -setnumber h %f -setnumber meshsize %f -setnumber bl1 %f -setnumber bl2 %f -o %s" % (
         Rr, Rl, t, h, meshsize, bl1, bl2, meshFile)
+    Popen("./gmsh_2 --version".split())
     gmsh = Popen(out.split())
     gmsh.wait()
     stepFile = foldername + '/'+meshGeo+'_step.geo';
     shutil.copyfile('./mesh/'+meshGeoFileName+'_step.geo', stepFile)
     meshStep = foldername + '/mesh.step'
-    out = "gmsh " + stepFile + " -setnumber Rr %f -setnumber Rl %f -setnumber t %f -setnumber h %f -setnumber bl1 %f -setnumber bl2 %f -parse_and_exit" % (
+    out = "./gmsh_2 " + stepFile + " -setnumber Rr %f -setnumber Rl %f -setnumber t %f -setnumber h %f -setnumber bl1 %f -setnumber bl2 %f -parse_and_exit" % (
         Rr, Rl, t, h, bl1, bl2)
     gmsh = Popen(out.split())
     gmsh.wait()
@@ -142,7 +143,7 @@ def generate_mesh(lens_config, meshsize):
     """ 
     generates the mesh with right radius Rr, left radius Rl,
     height h , and thickness t, and mesh characterestic length meshsize
-"""
+    """
 
     Rr, Rl, t, h, bl1, bl2, boundaryLayer, extruded = read_config(lens_config)
 
@@ -399,6 +400,32 @@ def simulate(lens_config, nu=0.3, num_increments = 200, increment_length = 5e-2,
     sio.savemat(foldername + '/outLens.mat',{'outL':outL, 'outR':outR})
     return True
 
+
+def eig_plus(A):
+    return (tr(A) + sqrt(tr(A)**2-4*det(A)))/2
+
+
+def eig_minus(A):
+    return (tr(A) - sqrt(tr(A)**2-4*det(A)))/2 
+
+
+def eigmatrix(A):
+    # FIXME: Not the full implementation
+    # Just a scratch version
+    e1 = eig_plus(A)
+    e2 = eig_minus(A)
+    
+    a = A[0,0]
+    b = A[0,1]
+    c = A[1,0]
+    d = A[1,1]
+    tol = 1e-9
+
+    return conditional(ge(abs(c),tol), as_matrix(((e1-d,e2-d), (c,c))),
+                       conditional(ge(abs(b), tol),as_matrix(((b,b), (e1-a,e2-a))),
+                                   Identity(2)))
+
+
 def simulate_incompressible(lens_config, nu=0.5, num_increments = 200, increment_length = 5e-2,compress = False):
     """
     the main function that simulates the problem
@@ -426,6 +453,8 @@ def simulate_incompressible(lens_config, nu=0.5, num_increments = 200, increment
     Sc = FunctionSpace(mesh, "DG", 1)
     pse = Function(Sc)
     vnms = Function(Sc)
+    ep = Function(Sc, name= "EvP") # Eigenvalues of Strain
+    em = Function(Sc, name= "EvM") # Eigenvalues of Strain
     if extruded:
         Tc = TensorFunctionSpace(mesh, "DG",1)
     else:
@@ -435,6 +464,7 @@ def simulate_incompressible(lens_config, nu=0.5, num_increments = 200, increment
     pse.rename("StrainEnergy")
     vnms.rename("VonMisesStrain")
     cauchy = Function(Tc,name="Cauchy")
+    vmat = Function(Tc, name="Evecs")
 
 
 
@@ -555,14 +585,17 @@ def simulate_incompressible(lens_config, nu=0.5, num_increments = 200, increment
               
             
              Green.interpolate(Constant(0.5) * (C - Identity(2)))
+             ep.interpolate(sqrt(eig_plus(C)))   
+             em.interpolate(sqrt(eig_minus(C)))   
              Strain = Constant(0.5) * (C - Identity(2));
              # FIXME: Shouldnt the deviatoric now be 1 because incompressible
              Straindev = Strain - 1/3.*tr(Strain)*Identity(2);
              SVM = sqrt(2/3.*inner(Straindev,Straindev))
              vnms.interpolate(SVM)
              pse.interpolate(psi)
+             vmat.interpolate(eigmatrix(C))
 
-             outfile.write(u, pse, Green,vnms,cauchy)
+             outfile.write(u, pse, Green,vnms,cauchy,em,ep,vmat)
         else:
             psi = (mu / 2) * (Ic - 3) - mu * ln(J) + (lmbda / 2) * (ln(J)) ** 2
             # Green.interpolate(Constant(0.5) * (C - Identity(3)))
@@ -736,7 +769,9 @@ def lens_simulation(lens_config, meshsize, nu, n, num_increments=200, increment_
             simulate(lens_config, nu=nu, num_increments=num_increments, increment_length=increment_length,compress = compress)
             focal_aberration_anlaysis(lens_config, n=n, nu=nu,compress = compress)
     else:
+        print("Generating Incompressible example")
         generate_mesh(lens_config, meshsize)
+        print("DONE")
         simulate_incompressible(lens_config, nu=nu, num_increments=num_increments, increment_length=increment_length,compress = compress)
         focal_aberration_anlaysis(lens_config, n=n, nu=nu,compress = compress)
 
@@ -744,14 +779,14 @@ def lens_simulation(lens_config, meshsize, nu, n, num_increments=200, increment_
 
 def main():
     
-    meshsize = 1.0;
+    meshsize = 0.5;
     n = 1.4;
     nu = 0.3
     increment_length = 5e-2
     num_increments = 200
     compress = False
 
-    lens_config = {'Rr':40, 'Rl':1500, 't':8, 'h':25, 'bl1': 0, 'bl2':0, 'boundaryLayer':False, 'extruded':False, 'concave':True}
+    lens_config = {'Rr':40, 'Rl':1500, 't':20, 'h':25, 'bl1': 0, 'bl2':0, 'boundaryLayer':False, 'extruded':True,'concave':False}
     #num_increments = 50
     #lens_simulation(lens_config, meshsize, [0.31,0.451], n, num_increments = num_increments, increment_length = increment_length, compress = True)
     num_increments = 100
