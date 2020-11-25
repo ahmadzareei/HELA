@@ -410,8 +410,6 @@ def eig_minus(A):
 
 
 def eigmatrix(A):
-    # FIXME: Not the full implementation
-    # Just a scratch version
     e1 = eig_plus(A)
     e2 = eig_minus(A)
     
@@ -581,32 +579,17 @@ def simulate_incompressible(lens_config, nu=0.5, num_increments = 200, increment
 
         if extruded:
              psi = (mu/2)*(Ic-2)
-             pk1 = diff(psi, F)
-             # FIXME: I believe we can get the actual dependence out in 3D 
-             # I am not sure if this perfectly correct
-             sigma = 1/J*pk1*F.T + p*Identity(2)
-             cauchy.interpolate(sigma)
-              
-            
+             pse.interpolate(psi)
              Green.interpolate(Constant(0.5) * (C - Identity(2)))
              ep.interpolate(sqrt(eig_plus(C)))   
              em.interpolate(sqrt(eig_minus(C)))   
-             Strain = Constant(0.5) * (C - Identity(2));
-             # FIXME: Shouldnt the deviatoric now be 1 because incompressible
-             Straindev = Strain - 1/3.*tr(Strain)*Identity(2);
-             SVM = sqrt(2/3.*inner(Straindev,Straindev))
-             vnms.interpolate(SVM)
-             pse.interpolate(psi)
              vmat.interpolate(eigmatrix(C))
 
-             outfile.write(u, pse, Green,vnms,cauchy,em,ep,vmat)
+             outfile.write(u, pse, Green,em,ep,vmat)
         else:
             psi = (mu / 2) * (Ic - 3)
-            # Green.interpolate(Constant(0.5) * (C - Identity(3)))
             pse.interpolate(psi)
             outfile.write(u, pse) # , Green
-
-        # Green.interpolate(Constant(0.5) * (C - Identity(2)))
 
 
     np.savez(foldername + '/outLens.npz', outL=outL, outR=outR);
