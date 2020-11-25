@@ -497,8 +497,7 @@ def simulate_incompressible(lens_config, nu=0.5, num_increments = 200, increment
     outR.append(newpoints_right)
 
     # R.\Omega is the force if the lens is rotating
-    #FIXME
-    extruded=True
+    # extruded=True
     if extruded:
         u,p = split(z)
         F1  = grad(u)+Identity(2)
@@ -509,8 +508,14 @@ def simulate_incompressible(lens_config, nu=0.5, num_increments = 200, increment
         R  = inner(PK1_inc(u,x,extruded = extruded,E=E), grad(v0))*dx
         R += R1
     else:
-        rhomega = Constant(1e-12)
-        R = inner(PK1_inc(u,x,extruded = extruded,E=E,nu=nu), ggrad(v,x)) * x[0] * dx - rhomega * x[0] * v[0] * x[0] * dx
+        u,p = split(z)
+        F1 = defgrad(u,x)
+        J = det(F1)
+        Lag_pressure = p*(J-1)*x[0]*dx
+        R1 = derivative(Lag_pressure,z,v) 
+        v0,v1 = split(v)
+        R = inner(PK1_inc(u,x,extruded = extruded,E=E,nu=nu), ggrad(v0,x)) * x[0] * dx 
+        R += R1
 
     bc1 = DirichletBC(W.sub(0).sub(0), Constant(0), 2)
     bc2 = PointWiseBC(W.sub(0), Constant((0, 0)), 3)
@@ -546,7 +551,6 @@ def simulate_incompressible(lens_config, nu=0.5, num_increments = 200, increment
     outfile = File(foldername + "/result.pvd")
 
     for i in range(num_increments):
-        # plt.clf()
         print("Iteration: ", i)
 
         scale = (i + 1) * increment_length*direction
@@ -597,9 +601,9 @@ def simulate_incompressible(lens_config, nu=0.5, num_increments = 200, increment
 
              outfile.write(u, pse, Green,vnms,cauchy,em,ep,vmat)
         else:
-            psi = (mu / 2) * (Ic - 3) - mu * ln(J) + (lmbda / 2) * (ln(J)) ** 2
+            psi = (mu / 2) * (Ic - 3)
             # Green.interpolate(Constant(0.5) * (C - Identity(3)))
-            # pse.interpolate(psi)
+            pse.interpolate(psi)
             outfile.write(u, pse) # , Green
 
         # Green.interpolate(Constant(0.5) * (C - Identity(2)))
