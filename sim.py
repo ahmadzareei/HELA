@@ -124,16 +124,15 @@ def make_mesh(meshGeo, lens_config, meshsize):
             meshGeoFileName = 'lensBL'
         else:
             meshGeoFileName = 'lens'
-    # /home/mathiew/Documents/Apps/gmsh-4.6.0-Linux64/bin/
-    out = "./gmsh_2 -2 ./mesh/"+meshGeoFileName+".geo -setnumber Rr %f -setnumber Rl %f -setnumber t %f -setnumber h %f -setnumber meshsize %f -setnumber bl1 %f -setnumber bl2 %f -o %s" % (
+    out = "gmsh -2 ./mesh/"+meshGeoFileName+".geo -setnumber Rr %f -setnumber Rl %f -setnumber t %f -setnumber h %f -setnumber meshsize %f -setnumber bl1 %f -setnumber bl2 %f -o %s" % (
         Rr, Rl, t, h, meshsize, bl1, bl2, meshFile)
-    Popen("./gmsh_2 --version".split())
+    Popen("gmsh --version".split())
     gmsh = Popen(out.split())
     gmsh.wait()
     stepFile = foldername + '/'+meshGeo+'_step.geo';
     shutil.copyfile('./mesh/'+meshGeoFileName+'_step.geo', stepFile)
     meshStep = foldername + '/mesh.step'
-    out = "./gmsh_2 " + stepFile + " -setnumber Rr %f -setnumber Rl %f -setnumber t %f -setnumber h %f -setnumber bl1 %f -setnumber bl2 %f -parse_and_exit" % (
+    out = "gmsh " + stepFile + " -setnumber Rr %f -setnumber Rl %f -setnumber t %f -setnumber h %f -setnumber bl1 %f -setnumber bl2 %f -parse_and_exit" % (
         Rr, Rl, t, h, bl1, bl2)
     gmsh = Popen(out.split())
     gmsh.wait()
