@@ -225,6 +225,14 @@ def PK1_inc(u,x,extruded = False, E = 1.0, nu=0.5):
 
     return diff(psi, F)
 
+def sigma_lin(u,E,nu =0.499):
+    # NOTE this does not work with incompressible
+
+    mu, lmbda = Constant(E / (2 * (1 + nu))), Constant(E * nu / ((1 + nu) * (1 - 2 * nu)))
+    eps = sym(grad(u))
+    return lmbda*tr(eps)*Identity(2) + 2.0*mu*eps
+    
+
 class PointWiseBC(DirichletBC):
     def nodes_to_zero(self, l1, l2):
         import functools
@@ -241,7 +249,7 @@ class PointWiseBC(DirichletBC):
 
 
 
-def simulate(lens_config, nu=0.3, num_increments = 200, increment_length = 5e-2,compress = False):
+def simulate(lens_config, nu=0.3, num_increments = 200, increment_length = 5e-2,compress = False,linear = False):
     """
     the main function that simulates the problem
     """
@@ -310,6 +318,10 @@ def simulate(lens_config, nu=0.3, num_increments = 200, increment_length = 5e-2,
         rhomega = Constant(1e-12)
         R = inner(PK1(u,x,extruded = extruded,E=E,nu=nu), ggrad(v,x)) * x[0] * dx - rhomega * x[0] * v[0] * x[0] * dx
 
+    if linear:
+        # This only works for cylindrical case
+        R = inner(cauchy_lin(u,E=E,nu=nu),sym(grad(v))*dx
+
     bc1 = DirichletBC(V.sub(0), Constant(0), 2)
     bc2 = PointWiseBC(V, Constant((0, 0)), 3)
 
@@ -348,6 +360,8 @@ def simulate(lens_config, nu=0.3, num_increments = 200, increment_length = 5e-2,
         foldername = foldername+'/nu_' + str(nu);
     mkdir(foldername)
     outfile = File(foldername + "/result.pvd")
+    if linear:
+        outfile = File(foldername + "/result_linear.pvd")
 
     for i in range(num_increments):
         # plt.clf()
