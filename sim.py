@@ -225,7 +225,7 @@ def PK1_inc(u,x,extruded = False, E = 1.0, nu=0.5):
 
     return diff(psi, F)
 
-def sigma_lin(u,E,nu =0.499):
+def sigma_lin(u,E=1,nu =0.499):
     # NOTE this does not work with incompressible
 
     mu, lmbda = Constant(E / (2 * (1 + nu))), Constant(E * nu / ((1 + nu) * (1 - 2 * nu)))
@@ -320,7 +320,7 @@ def simulate(lens_config, nu=0.3, num_increments = 200, increment_length = 5e-2,
 
     if linear:
         # This only works for cylindrical case
-        R = inner(cauchy_lin(u,E=E,nu=nu),sym(grad(v))*dx
+        R = inner(cauchy_lin(u,E=E),sym(grad(v))*dx
 
     bc1 = DirichletBC(V.sub(0), Constant(0), 2)
     bc2 = PointWiseBC(V, Constant((0, 0)), 3)
