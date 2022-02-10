@@ -30,4 +30,4 @@ If using this code, parts of it, or developments from it, please cite our paper:
 
 Contributors:
 - <a href = "https://github.com/medinaeder">Eder Medina</a> 
-- <a href="https://github.com/ahmadzareei">Ahmad Zareei</a> 
+- <a href="https://github.com/azareei">Ahmad Zareei</a> 
